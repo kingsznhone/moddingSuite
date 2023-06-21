@@ -3,11 +3,16 @@ Wargame modding suite  [![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_
 
 This software brings modding to R.U.S.E, Wargame: European Escalation, Wargame: Airland Battle and Wargame: Red Dragon.
 
+I upgrade this project to .NET 6.
+ 
+Might improve performance & stability. 
+
 System Requirements
 ============
 
-You need to have the .NET Desktop Runtime you can download it here:
-https://dotnet.microsoft.com/download/dotnet/5.0
+.Net 6 Desktop Runtime
+
+https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-6.0.18-windows-x64-installer
 
 License
 ============
