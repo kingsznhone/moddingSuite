@@ -37,16 +37,16 @@ namespace moddingSuite.ViewModel.Edata
         protected DirectoryViewModel ParseDirectory(DirectoryInfo info)
         {
             var dirVm = new DirectoryViewModel(info);
+                foreach (var directoryInfo in dirVm.Info.EnumerateDirectories())
+                {
+                    dirVm.Items.Add(ParseDirectory(directoryInfo));
+                }
 
-            foreach (var directoryInfo in dirVm.Info.EnumerateDirectories())
-            {
-                dirVm.Items.Add(ParseDirectory(directoryInfo));
-            }
-
-            foreach (var fileInfo in dirVm.Info.EnumerateFiles())
-            {
-                dirVm.Items.Add(new FileViewModel(fileInfo));
-            }
+                foreach (var fileInfo in dirVm.Info.EnumerateFiles())
+                {
+                    dirVm.Items.Add(new FileViewModel(fileInfo));
+                }
+            
 
             return dirVm;
         }

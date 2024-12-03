@@ -36,7 +36,7 @@ namespace moddingSuite.BL.Compressing
             {
                 using (var compressed = new MemoryStream())
                 {
-                    using (var zipSteam = new ZlibStream(compressed, CompressionMode.Compress, CompressionLevel.Level9, true))
+                    using (var zipSteam = new ZlibStream(compressed, Ionic.Zlib.CompressionMode.Compress, Ionic.Zlib.CompressionLevel.Level9, true))
                     {
                         zipSteam.FlushMode = FlushType.Full;
 
