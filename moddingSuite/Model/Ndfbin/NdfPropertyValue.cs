@@ -66,7 +66,11 @@ namespace moddingSuite.Model.Ndfbin
             set
             {
                 _value = value;
-                _value.ParentProperty = this;
+                if (_value != null)
+                {
+                    _value.ParentProperty = this;
+                }
+                
                 OnPropertyChanged("Value");
             }
         }

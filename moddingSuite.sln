@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "tgvExporter", "tgvExporter\tgvExporter.csproj", "{24E89F60-73BD-4AF3-A27F-06ED5AC496AA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BGManager", "BGManager\BGManager.csproj", "{30DC636F-A57A-4886-A7EC-56E45154A564}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -33,6 +35,10 @@ Global
 		{24E89F60-73BD-4AF3-A27F-06ED5AC496AA}.Debug|x64.Build.0 = Debug|x64
 		{24E89F60-73BD-4AF3-A27F-06ED5AC496AA}.Release|x64.ActiveCfg = Release|x64
 		{24E89F60-73BD-4AF3-A27F-06ED5AC496AA}.Release|x64.Build.0 = Release|x64
+		{30DC636F-A57A-4886-A7EC-56E45154A564}.Debug|x64.ActiveCfg = Debug|x64
+		{30DC636F-A57A-4886-A7EC-56E45154A564}.Debug|x64.Build.0 = Debug|x64
+		{30DC636F-A57A-4886-A7EC-56E45154A564}.Release|x64.ActiveCfg = Release|x64
+		{30DC636F-A57A-4886-A7EC-56E45154A564}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
