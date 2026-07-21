@@ -166,7 +166,7 @@ namespace moddingSuite.BL.Mesh
                 DumpBufferSlices(dumpDir, "Vertex1DBufferStreams", file.VertexBufferSlices);
 
                 // ── Dump mesh hierarchy as JSON ───────────────────────────────────────
-                DumpMeshHierarchyJson(dumpDir, file);
+                DumpMeshHierarchyJson(dumpDir, file, sections);
             }
 
             return file;
@@ -182,16 +182,64 @@ namespace moddingSuite.BL.Mesh
         ///   mesh_hierarchy.json           — combined: each MultiMaterialMesh with its MeshContentFile
         ///                                   and the SingleMaterialMesh children inlined
         /// </summary>
-        private static void DumpMeshHierarchyJson(string dumpDir, MeshFile file)
+        private static void DumpMeshHierarchyJson(
+            string dumpDir,
+            MeshFile file,
+            List<(string Name, long Offset, long Size, long Count)> sections)
         {
+            // Build a name → sorted-index lookup so JSON files share the same
+            // numeric prefix as their corresponding .bin counterparts.
+            var sectionIndex = new Dictionary<string, int>(sections.Count);
+            for (int i = 0; i < sections.Count; i++)
+                sectionIndex[sections[i].Name] = i;
+
+            string Prefix(string sectionName)
+                => sectionIndex.TryGetValue(sectionName, out int idx) ? $"{idx:D2}_" : string.Empty;
+
             var opts = new JsonSerializerOptions
             {
                 WriteIndented     = true,
                 DefaultIgnoreCondition = JsonIgnoreCondition.Never,
             };
 
+            // ── FileHeader ───────────────────────────────────────────────────────────
+            var hdr = file.Header;
+            WriteJson(dumpDir, $"{Prefix("FileHeader")}FileHeader.json", new
+            {
+                Magic          = "MESH",
+                hdr.Platform,
+                hdr.Version,
+                hdr.FileSize,
+                Checksum       = hdr.Checksum != null ? Convert.ToHexString(hdr.Checksum) : null,
+                hdr.HeaderOffset,
+                hdr.HeaderSize,
+                hdr.ContentOffset,
+                hdr.ContentSize,
+            }, opts);
+
+            // ── SubHeader ────────────────────────────────────────────────────────────
+            var sh2 = file.SubHeader;
+            WriteJson(dumpDir, $"{Prefix("SubHeader")}SubHeader.json", new
+            {
+                sh2.MeshCount,
+                Sections = new[]
+                {
+                    new { Name = "Dictionary",              sh2.Dictionary.Offset,              sh2.Dictionary.Size,              Count = (long)sh2.Dictionary.Count },
+                    new { Name = "VertexTypeNames",         sh2.VertexTypeNames.Offset,         sh2.VertexTypeNames.Size,         Count = (long)sh2.VertexTypeNames.Count },
+                    new { Name = "MeshMaterial_NDF",        sh2.MeshMaterial.Offset,            sh2.MeshMaterial.Size,            Count = (long)sh2.MeshMaterial.Count },
+                    new { Name = "KeyedMeshSubPart",        sh2.KeyedMeshSubPart.Offset,        sh2.KeyedMeshSubPart.Size,        Count = (long)sh2.KeyedMeshSubPart.Count },
+                    new { Name = "KeyedMeshSubPartVectors", sh2.KeyedMeshSubPartVectors.Offset, sh2.KeyedMeshSubPartVectors.Size, Count = (long)sh2.KeyedMeshSubPartVectors.Count },
+                    new { Name = "MultiMaterialMeshes",     sh2.MultiMaterialMeshes.Offset,     sh2.MultiMaterialMeshes.Size,     Count = (long)sh2.MultiMaterialMeshes.Count },
+                    new { Name = "SingleMaterialMeshes",    sh2.SingleMaterialMeshes.Offset,    sh2.SingleMaterialMeshes.Size,    Count = (long)sh2.SingleMaterialMeshes.Count },
+                    new { Name = "Index1DBufferHeaders",    sh2.Index1DBufferHeaders.Offset,    sh2.Index1DBufferHeaders.Size,    Count = (long)sh2.Index1DBufferHeaders.Count },
+                    new { Name = "Index1DBufferStreams",     sh2.Index1DBufferStreams.Offset,    sh2.Index1DBufferStreams.Size,    Count = -1L },
+                    new { Name = "Vertex1DBufferHeaders",   sh2.Vertex1DBufferHeaders.Offset,   sh2.Vertex1DBufferHeaders.Size,   Count = (long)sh2.Vertex1DBufferHeaders.Count },
+                    new { Name = "Vertex1DBufferStreams",    sh2.Vertex1DBufferStreams.Offset,   sh2.Vertex1DBufferStreams.Size,   Count = -1L },
+                },
+            }, opts);
+
             // ── raw tables ───────────────────────────────────────────────────────────
-            WriteJson(dumpDir, "MultiMaterialMeshFiles.json",
+            WriteJson(dumpDir, $"{Prefix("Dictionary")}MultiMaterialMeshFiles.json",
                 file.MultiMaterialMeshFiles?.Select((f, i) => new
                 {
                     Index    = i,
@@ -205,7 +253,7 @@ namespace moddingSuite.BL.Mesh
                 }),
                 opts);
 
-            WriteJson(dumpDir, "MultiMaterialMeshes.json",
+            WriteJson(dumpDir, $"{Prefix("MultiMaterialMeshes")}MultiMaterialMeshes.json",
                 file.MultiMaterialMeshes?.Select((m, i) => new
                 {
                     Index            = i,
@@ -214,7 +262,7 @@ namespace moddingSuite.BL.Mesh
                 }),
                 opts);
 
-            WriteJson(dumpDir, "SingleMaterialMeshes.json",
+            WriteJson(dumpDir, $"{Prefix("SingleMaterialMeshes")}SingleMaterialMeshes.json",
                 file.SingleMaterialMeshes?.Select((m, i) => new
                 {
                     Index                  = i,
@@ -222,6 +270,65 @@ namespace moddingSuite.BL.Mesh
                     m.UnknownIndex,
                     m.IndexBufferIndex,
                     m.VertexBufferIndex,
+                }),
+                opts);
+
+            // ── VertexTypeNames + decoded formats ────────────────────────────────────
+            WriteJson(dumpDir, $"{Prefix("VertexTypeNames")}VertexTypeNames.json",
+                file.VertexTypeNames?.Select((name, i) =>
+                {
+                    var fmt = (file.VertexFormats != null && i < file.VertexFormats.Count)
+                              ? file.VertexFormats[i] : null;
+                    return new
+                    {
+                        Index  = i,
+                        Name   = name,
+                        Stride = fmt?.Stride ?? 0,
+                        Attributes = fmt?.Attributes.Select(a => new
+                        {
+                            a.Semantic,
+                            ElementType    = a.ElementType.ToString(),
+                            a.ComponentCount,
+                            a.ByteSize,
+                        }).ToList(),
+                    };
+                }),
+                opts);
+
+            // ── Index1DBufferHeaders ──────────────────────────────────────────────────
+            WriteJson(dumpDir, $"{Prefix("Index1DBufferHeaders")}Index1DBufferHeaders.json",
+                file.Index1DBufferHeaders?.Select((h, i) => new
+                {
+                    Index      = i,
+                    h.Offset,
+                    h.Length,
+                    IndexCount = file.IndexStride > 0 ? (int)(h.Length / file.IndexStride) : 0,
+                    h.S0,
+                    h.S1,
+                    h.S2,
+                    S3_Hex     = $"0x{h.S3:X4}",
+                }),
+                opts);
+
+            // ── Vertex1DBufferHeaders ─────────────────────────────────────────────────
+            WriteJson(dumpDir, $"{Prefix("Vertex1DBufferHeaders")}Vertex1DBufferHeaders.json",
+                file.Vertex1DBufferHeaders?.Select((h, i) =>
+                {
+                    var fmt = (file.VertexFormats != null && h.S2 < file.VertexFormats.Count)
+                              ? file.VertexFormats[h.S2] : null;
+                    return new
+                    {
+                        Index       = i,
+                        h.Offset,
+                        h.Length,
+                        VertexCount = fmt?.Stride > 0 ? (int)(h.Length / fmt.Stride) : 0,
+                        Stride      = fmt?.Stride ?? 0,
+                        FormatIndex = h.S2,
+                        FormatName  = fmt?.TypeName,
+                        h.S0,
+                        h.S1,
+                        S3_Hex      = $"0x{h.S3:X4}",
+                    };
                 }),
                 opts);
 
@@ -261,10 +368,15 @@ namespace moddingSuite.BL.Mesh
             WriteJson(dumpDir, "mesh_hierarchy.json", combined, opts);
 
             Console.WriteLine();
-            Console.WriteLine($"[MeshReader] === JSON hierarchy dumped to: {dumpDir} ===");
-            Console.WriteLine($"[MeshReader]   MultiMaterialMeshFiles.json  ({mmf?.Count ?? 0} entries)");
-            Console.WriteLine($"[MeshReader]   MultiMaterialMeshes.json     ({mmm?.Count ?? 0} entries)");
-            Console.WriteLine($"[MeshReader]   SingleMaterialMeshes.json    ({smm?.Count ?? 0} entries)");
+            Console.WriteLine($"[MeshReader] === JSON tables dumped to: {dumpDir} ===");
+            Console.WriteLine($"[MeshReader]   {Prefix("FileHeader")}FileHeader.json");
+            Console.WriteLine($"[MeshReader]   {Prefix("SubHeader")}SubHeader.json");
+            Console.WriteLine($"[MeshReader]   {Prefix("Dictionary")}MultiMaterialMeshFiles.json  ({mmf?.Count ?? 0} entries)");
+            Console.WriteLine($"[MeshReader]   {Prefix("VertexTypeNames")}VertexTypeNames.json         ({file.VertexTypeNames?.Count ?? 0} entries)");
+            Console.WriteLine($"[MeshReader]   {Prefix("MultiMaterialMeshes")}MultiMaterialMeshes.json     ({mmm?.Count ?? 0} entries)");
+            Console.WriteLine($"[MeshReader]   {Prefix("SingleMaterialMeshes")}SingleMaterialMeshes.json    ({smm?.Count ?? 0} entries)");
+            Console.WriteLine($"[MeshReader]   {Prefix("Index1DBufferHeaders")}Index1DBufferHeaders.json    ({file.Index1DBufferHeaders?.Count ?? 0} entries)");
+            Console.WriteLine($"[MeshReader]   {Prefix("Vertex1DBufferHeaders")}Vertex1DBufferHeaders.json   ({file.Vertex1DBufferHeaders?.Count ?? 0} entries)");
             Console.WriteLine($"[MeshReader]   mesh_hierarchy.json          (combined)");
         }
 
@@ -273,17 +385,6 @@ namespace moddingSuite.BL.Mesh
             string path = Path.Combine(dir, fileName);
             using var fs = new FileStream(path, FileMode.Create, FileAccess.Write);
             JsonSerializer.Serialize(fs, value, opts);
-        }
-
-        // Prints offset/size/count for a section entry
-        private static void PrintSection(string name, MeshHeaderEntry e)
-        {
-            Console.WriteLine($"[MeshReader]   {name,-26}  offset={e.Offset,10}  size={e.Size,12}");
-        }
-
-        private static void PrintSection(string name, MeshHeaderEntryWithCount e)
-        {
-            Console.WriteLine($"[MeshReader]   {name,-26}  offset={e.Offset,10}  size={e.Size,12}  count={e.Count,6}");
         }
 
         /// <summary>
